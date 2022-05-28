@@ -1,0 +1,99 @@
+dmax.norm <- function(modelo=fit.model,iden=double(ncol(model.matrix(modelo))),nome=seq(along = model.matrix(modelo)[,1])) {
+
+#
+# Descrição e detalhes:
+# A saída terá gráficos do dmax para cada coeficiente de um modelo normal linear.
+#
+# A influência local consiste em procurar pontos que sob pequenas perturbações causam variações muito grandes nos
+# resultados. O dmax é o autovetor que corresponde ao maior autovalor da matriz do processo de perturbações. Para
+# maiores detalhes veja Paula (2003, págs.50-54). O critério foi o de destacar observações maiores do que duas
+# vezes a média de todos os dmax's absolutos.
+#
+# Os dados devem estar disponíveis pelo comando attach( ).
+#
+# Argumentos obrigatórios:
+# modelo: deve-se informar o objeto onde está o ajuste do modelo normal linear, caso não seja informado, a função
+# 	  procurará o ajuste no objeto fit.model;
+# 
+# Argumentos opcionais:
+# iden: caso deseje, informe o número de observações que irá querer destacar em cada gráfico. O vetor deve
+# 	conter números inteiros. A ordem que deve ser informada é a mesma das variáveis da opção var, caso seja
+#	utilizada, ou deve ter a mesma ordem da matriz modelo. Os componentes do vetor iguais a 0 indicam que não se
+#	quer que identifique pontos, se for um inteiro positivo irá automaticamente nos gráficos pertinentes permitir
+#	que identifiquemos o número de pontos solicitados e qualquer outro valor (negativo ou decimal) parará nos
+#	gráficos e irá solicitar que especifiquemos o número de pontos a ser destacado. O padrão é c(0,...,0) caso não
+#	se entre com nada e c(-1,...,-1) caso se entre com qualquer coisa que não satisfaça os requisitos citados
+#	de ser número inteiro, não negativo e de ter o mesmo comprimento da opção var ou da matriz modelo;
+# nome: esse argumento só é utilizado caso algum dos componentes do vetor da opção iden não seja 0. Caso não
+#	seja informado nada, os pontos identificados serão os números da ordem em que estão no banco de dados.
+#	Caso se queira, pode-se informar um vetor de nomes ou de identificações alternativas. Obrigatoriamente
+#	esse vetor deve ter o mesmo comprimento do banco de dados.
+#
+# Autor: Frederico Zanqueta Poleto <fred@poleto.com>, arquivo disponível em http://www.poleto.com
+#
+# Referência:
+# PAULA, G. A. (2003). Modelos de Regressão com apoio computacional. IME-USP, São Paulo. [Não publicado,
+#    disponível em http://www.ime.usp.br/~giapaula/Book.pdf]
+#
+# Exemplo:
+# dmax.norm(ajuste,iden=-1,nome=estados)
+#
+
+if( class(modelo)[1]=="lm" || (class(modelo)[1]=="glm" && (modelo$family[[1]]=="Gaussian" | modelo$family[[1]]=="gaussian")) ) {
+
+} else {
+	stop(paste("\nA classe do objeto deveria ser lm ou glm (com distribuicao gaussian) !!!"))
+}
+
+X <- model.matrix(modelo)
+n <- nrow(X)
+p <- ncol(X)
+r<-resid(modelo)
+
+if(p>length(iden)) {
+	iden<-rep(-1,p)
+}
+
+if (p>2) {
+	if (p>8) {	
+		par(mfrow=c(3,ceiling(p/3)))
+	} else {
+		par(mfrow=c(2,ceiling(p/2)))
+	}
+} else {
+	par(mfrow=c(1,ceiling(p)))
+}
+
+for(i in 1:p) {
+	expl<-""
+	expli<-0
+	for(j in 1:p) {
+		if(j!=i) {
+			if(expli>0) {
+				expli<-expli+1
+				expl<-paste(expl,"+X[,",j,"]",sep="")
+			} else {
+				expli<-1
+				expl<-paste("X[,",j,"]",sep="")
+			}
+		}
+	}
+	v<-resid(lm(as.formula(paste("X[,",i,"]~",expl,"-1"))))
+	dmax<-v*r
+	dmax<-dmax/sqrt( t(dmax)%*%dmax )
+	#cut<-2/sqrt(n)
+	cut<-2*mean(abs(dmax))
+	plot(dmax,xlab="Índice", ylab="dmax",main=dimnames(X)[[2]][i],ylim=c(min(-cut,dmax),max(cut,dmax)), pch=16)
+	abline(-cut,0,lty=2)
+	abline(cut,0,lty=2)
+	while ( (!is.numeric(iden[i])) || (round(iden[i],0) != iden[i]) || (iden[i] < 0) ) {
+		cat("Digite o num.de pontos a ser identificado (0=nenhum) e <enter> para continuar\n")
+		out <- readline()
+		iden[i]<-as.numeric(out)
+	}
+	if(iden[i]>0) {identify(dmax,n=iden[i],labels=nome)}
+}
+
+par(mfrow=c(1,1))
+cat("\n")
+}
