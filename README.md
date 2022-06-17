@@ -1,7 +1,7 @@
 # Projetos UFC
 Projetos realizados durante o bacharelado em Estatística na Universidade Federal do Ceará, divididos por disciplina
 
-##Grade curricular do curso:
+## Grade curricular do curso:
 
 ![Grade curricular do curso de Estatística da UFC](https://dema.ufc.br/wp-content/uploads/2017/09/fluxograma-estatistica.png "Grade curricular do curso de Estatística da UFC")
 
