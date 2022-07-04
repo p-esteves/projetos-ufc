@@ -16,6 +16,8 @@ Este repositório contém, atualmente, projetos e atividades na linguagem R real
 - Estatística Não-Paramétrica
      - Exercícios de simulação de Monte Carlo em populações de diversas distribuições de probabilidade e comparação entre testes não-paramétricos (Qui-quadrado, Cramér-von Mises, Kolmogorov-Smirnov)
 
+- Séries Temporais
+     - Exercícios da disciplina. Temas abordados no semestre: Processos estacionários, alisamento exponencial, modelos ARMA, ARIMA, SARIMA, ARCH e GARCH
 
 
 
