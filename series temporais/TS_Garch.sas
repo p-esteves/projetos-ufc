@@ -1,0 +1,588 @@
+
+
+data a;
+   do time = -10 to 120;
+      s = 1 + (time >= 60 & time < 90);
+      u = s*rannor(12346);
+      y = 10 + .5 * time + u;
+      if time > 0 then output;
+      end;
+run;
+
+proc sgplot data=a noautolegend;
+   series x=time y=y / markers; 
+  * reg x=time y=y / lineattrs=(color=black);
+run;
+ 
+proc arima data=a plots=all;
+*i var=y esacf scan minic;
+i var=y(1) esacf scan minic;
+run;
+e p=0 q=1;
+forecast id=time lead=5 out=previstos(rename=(residual=res)); * renomeia os residuos *;
+run;
+
+proc sgplot data=previstos; 
+   series x=time y=y ;
+   series x=time y=forecast ;
+   series x=time y=l95;
+   series x=time y=u95;
+run;
+
+*Note q esse ajuste é ruim! Alternativa, visto q existe variação a variancia, podemos verificar de tem efeito ARCH: ;
+
+data previstos; set previstos; 
+res2=res**2;
+run;
+
+proc arima data=previstos plots=all;
+i var=res2 esacf scan minic;
+run;
+e p=1 q=0;
+forecast id=time lead=5 out=previstos(rename=(residual=res));
+run;
+
+proc autoreg data=a all plots(unpack);
+   model y = time / archtest=(qlm,lk,wl) ; ** Teste para homodecasticidade: H0) Ausencia de heterocedasticidade. Note que rejeitamos, i.e existe efeito ARCH;
+   output out=out p=yhat  pm=ytrend lcl=lcl ucl=ucl;
+run;
+
+proc autoreg data=a all plots(unpack);
+   model y = time / nlag=1 garch=(p=1,q=1) ; ** Teste para homodecasticidade: H0) Ausencia de heterocedasticidade. Note que rejeitamos, i.e existe efeito ARCH;
+   output out=saida p=yhat  pm=ytrend lcl=l95 ucl=u95;
+run;
+
+proc sgplot data=saida; 
+   series x=time y=y ;
+   series x=time y=yhat ;
+   series x=time y=l95;
+   series x=time y=u95;
+run;
+
+
+data out;
+   set out;
+   shat = sqrt( vhat );
+run;
+
+title 'Predicted and Actual Standard Deviations';
+proc sgplot data=out noautolegend;
+   scatter x=time y=s; 
+   series x=time y=shat/ lineattrs=(color=black); 
+run;
+
+
+data c;
+   ul=0; ull=0;
+   do t = -10 to 120;
+      s = 1 + (t >= 60 & t < 90);
+      u = + 1.3 * ul - .5 * ull + s*rannor(12346);
+      y = 10 + .5 * t + u;
+      if t > 0 then output;
+      ull = ul; ul = u;
+  x=log((y-lag(y))/lag(y)); 
+  x2=x**2;
+    end;
+ run;
+
+proc sgplot data=c;
+   series x=t y=x;
+run; 
+
+proc sgplot data=c;
+   series x=t y=x;
+run; 
+
+proc autoreg data=c all plots(unpack);
+   model x2 = t  / archtest=(qlm,lk,wl) ; ** Teste para homodecasticidade: H0) Ausencia de heterocedasticidade. Note que rejeitamos, i.e existe efeito ARCH;
+*   model closeprice = time  / garch=(p=1,q=1) ; ** Teste para homodecasticidade: H0) Ausencia de heterocedasticidade. Note que rejeitamos, i.e existe efeito ARCH;
+   output out=out p=yhat  pm=ytrend lcl=lcl ucl=ucl;
+run;
+
+
+proc arima data=c plots=all;
+identify var=x2 nlag=50 esacf minic scan;
+run;
+
+proc arima data=c plots=all;
+i var=y esacf;
+run;
+
+title 'AR(2)-GARCH(1,1) model for the Y series regressed on TIME';
+proc autoreg data=c;
+   model y = t / nlag=2 garch=(q=1,p=1) maxit=50;
+   output out=out cev=vhat;
+run;
+ 
+ 
+ 
+   %let df = 7.5;
+   %let sig1 = 1;
+   %let sig2 = 0.1 ;
+   %let var2 = 2.5;
+   %let nobs = 1000 ;
+   %let nobs2 = 2000 ;
+   %let arch0 = 0.1 ;
+   %let arch1 = 0.2 ;
+   %let garch1 = 0.75 ;
+   %let intercept = 0.5 ;
+
+   data normal;
+      lu = &var2;
+      lh = &var2;
+      do i= -500  to &nobs ;
+              /* GARCH(1,1) with normally distributed residuals */
+         h = &arch0 + &arch1*lu**2 + &garch1*lh;
+         u = sqrt(h) * rannor(12345) ;
+         y = &intercept + u;
+         lu = u;
+         lh = h;
+         if i > 0 then output;
+      end;
+   run;
+
+proc autoreg data=normal;
+model y =/archtest;
+run ;
+
+proc autoreg data = normal ;
+    /* Estimate GARCH(1,1) with normally distributed residuals with AUTOREG*/
+      model y = / garch = ( q=1,p=1 ) ;
+   run ;
+   quit ;
+
+
+proc sgplot data=normal;
+   series x=i y=y;
+run;   
+
+proc arima data=normal plots=all;
+i var=y esacf scan minic;
+*e p=(1,2)(12,24) q=(1,2,3,4)(12,24,36);
+run;
+
+proc autoreg data = normal plots=all ;
+      model y = / garch = ( q=1,p=1 )  ;
+ output out=pre pm=p r=r lcl=l95 ucl=u95;   
+run;   quit ;
+
+proc sgplot data=pre; 
+   series x=i y=y ;
+   series x=i y=p;
+ *  series x=i y=l95;
+ *  series x=i y=u95;
+run;
+ 
+
+data stock; set sashelp.stocks;
+run;
+
+proc sgplot data=stock;
+   series x=DATe y=close;
+run;   
+proc sgplot data=air;
+   series x=DATe y=logair;
+run;  
+
+proc arima data=air plots=all;
+i var=logair(1,12) esacf scan minic;
+*e p=(1,2)(12,24) q=(1,2,3,4)(12,24,36);
+e p=(2)(12,24) q=(4)(12,24,36);
+run;
+forecast id=DATe lead=5 out=previstos;
+run;
+
+proc sgplot data=previstos; 
+   series x=DATe y=logair ;
+   series x=DATe y=forecast ;
+   series x=DATe y=l95;
+   series x=DATe y=u95;
+run;
+ 
+
+* existe uma tendencia e a variancia nao é constante, vamos trabalhar com log(air) pra estabilizar a variancia;
+
+proc sgplot data=air;
+   series x=DATe y=y;
+run;
+
+
+proc arima data=air plots=all;
+*identify var=logair nlag=100; *o decaimento lento da fac sugere a existencia de tendencia, entao devemos diferenciar; 
+*identify var=logair(1) nlag=100;  * a fac com picos de 12 em 12 meses sugere forte componente sazonal de periodo s=12, assim d=1 e D=1. 
+Devemos diferenciar a serie uma vez pra remover tendencia e outra vez no lag 12 pra remover sazonalidade. Podemos usar o q sabemos sobre ARMA(p,q) para encontrar p e q;
+identify var=logair(1,12) nlag=50 esacf scan minic;
+run;
+estimate p=(12) q=(2)(1,12) plot;
+run;
+forecast id=DATe lead=3 out=previstos;
+run;
+
+proc sgplot data=previstos; 
+   series x=DATe y=logair ;
+   series x=DATe y=forecast ;
+   series x=DATe y=l95;
+   series x=DATe y=u95;
+run;
+
+
+data d; 
+input t yymmdd10. x;
+format t ddmmyyb10.;
+lx=log(x);
+dx=x-lag(x);
+dx4=x-lag4(x);
+dx12=x-lag12(x);
+cards;
+1962-01-01	0.441824937667887
+1962-04-01	0.445128637509513
+1962-07-01	0.449765222436262
+1962-10-01	0.474811879731262
+1963-01-01	0.613277754770273
+1963-04-01	0.510354518243053
+1963-07-01	0.522990219773612
+1963-10-01	0.520713509089347
+1964-01-01	0.520295658989036
+1964-04-01	0.502149482987937
+1964-07-01	0.491338136276762
+1964-10-01	0.466287218074178
+1965-01-01	0.459929760882693
+1965-04-01	0.442742199045564
+1965-07-01	0.417601356266691
+1965-10-01	0.398411826047960
+1966-01-01	0.374084968855234
+1966-04-01	0.387617577994240
+1966-07-01	0.464338765063268
+1966-10-01	0.664726131895554
+1967-01-01	0.947767873426780
+1967-04-01	1.522589172001560
+1967-07-01	1.599497730640860
+1967-10-01	1.428720208369000
+1968-01-01	1.089275015511170
+1968-04-01	1.108264238471410
+1968-07-01	0.927893984531785
+1968-10-01	0.762284445277461
+1969-01-01	0.636734113063020
+1969-04-01	0.543553273625676
+1969-07-01	0.488015534447373
+1969-10-01	0.456896188451111
+1970-01-01	0.477077881201035
+1970-04-01	0.422188733741570
+1970-07-01	0.420132924980267
+1970-10-01	0.430472074230468
+1971-01-01	0.473638262778157
+1971-04-01	0.508073366614908
+1971-07-01	0.557099732036081
+1971-10-01	0.625724476207693
+1972-01-01	0.686599797011686
+1972-04-01	0.721152966146859
+1972-07-01	0.752053682814440
+1972-10-01	0.726421801735566
+1973-01-01	0.693923138583584
+1973-04-01	0.727380247886186
+1973-07-01	0.789862606023810
+1973-10-01	0.964750972152278
+1974-01-01	1.230663207710110
+1974-04-01	1.486688136355420
+1974-07-01	1.802195717947500
+1974-10-01	2.284972663435710
+1975-01-01	2.544899009929060
+1975-04-01	3.196849849022420
+1975-07-01	3.515714784875000
+1975-10-01	3.466604642745050
+1976-01-01	3.269650617809720
+1976-04-01	3.214002265863190
+1976-07-01	3.123007402753590
+1976-10-01	3.065729216160210
+1977-01-01	3.022228548978730
+1977-04-01	3.099884992483490
+1977-07-01	3.132066806199110
+1977-10-01	3.080796369628370
+1978-01-01	3.018859169979450
+1978-04-01	3.013240725208140
+1978-07-01	2.945260846358230
+1978-10-01	2.859930104886630
+1979-01-01	2.778417368493380
+1979-04-01	2.616644277635590
+1979-07-01	2.523468958357330
+1979-10-01	2.425996859766060
+1980-01-01	2.441294212628710
+1980-04-01	2.472946432400100
+1980-07-01	2.637588001268760
+1980-10-01	2.832364006136720
+1981-01-01	3.128514341526990
+1981-04-01	3.471919474266950
+1981-07-01	3.884521379519870
+1981-10-01	4.324939820269360
+1982-01-01	4.729394173389070
+1982-04-01	5.114972065203050
+1982-07-01	5.486986248549300
+1982-10-01	5.998793569407820
+1983-01-01	6.308961486997190
+1983-04-01	6.645028627640700
+1983-07-01	6.713063965805360
+1983-10-01	6.640362803944950
+1984-01-01	6.570465469066740
+1984-04-01	6.561949368425090
+1984-07-01	6.599745997011620
+1984-10-01	6.606473085639430
+1985-01-01	6.629637248236910
+1985-04-01	6.682458818047070
+1985-07-01	6.648230936998220
+1985-10-01	6.627900740587170
+1986-01-01	6.546448279713280
+1986-04-01	6.429915259067340
+1986-07-01	6.313504625598340
+1986-10-01	6.225343891293700
+1987-01-01	6.273157707612550
+1987-04-01	6.316762113473790
+1987-07-01	6.358431246077680
+1987-10-01	6.388099728883340
+1988-01-01	6.180485060994790
+1988-04-01	6.153361717944940
+1988-07-01	6.052295546620230
+1988-10-01	5.922124697857970
+1989-01-01	5.664846412862960
+1989-04-01	5.542012765884740
+1989-07-01	5.385968105465930
+1989-10-01	5.397727570122870
+1990-01-01	5.004444012068990
+1990-04-01	4.898118352792050
+1990-07-01	4.728055370063620
+1990-10-01	4.635720415745000
+1991-01-01	5.118719698618700
+1991-04-01	5.371045019273450
+1991-07-01	5.934172866843700
+1991-10-01	6.142437710210640
+1992-01-01	6.390661299041050
+1992-04-01	6.533988044551840
+1992-07-01	6.770168926014140
+1992-10-01	7.120089709536140
+1993-01-01	7.336302552343600
+1993-04-01	7.777324178219700
+1993-07-01	8.177175693893520
+1993-10-01	8.552751935194560
+1994-01-01	8.575006833817510
+1994-04-01	8.663216419765490
+1994-07-01	8.473168378791590
+1994-10-01	8.254720745537260
+1995-01-01	8.082781802842000
+1995-04-01	8.131651944488420
+1995-07-01	8.226307422553350
+1995-10-01	8.393405640451620
+1996-01-01	8.726122212015830
+1996-04-01	8.773566713760220
+1996-07-01	9.010128597681830
+1996-10-01	9.309111821006540
+1997-01-01	9.663773835613900
+1997-04-01	9.886544669015910
+1997-07-01	10.043008288198900
+1997-10-01	10.057051513241200
+1998-01-01	9.744097865397560
+1998-04-01	9.416768745422110
+1998-07-01	9.110177393612270
+1998-10-01	8.883257404219340
+1999-01-01	8.641506500028480
+1999-04-01	8.571333155956260
+1999-07-01	8.424816182942920
+1999-10-01	8.220463772010980
+2000-01-01	8.054569659995940
+2000-04-01	7.840054844021110
+2000-07-01	7.712163870942880
+2000-10-01	7.591650584190770
+2001-01-01	7.682355204788080
+2001-04-01	7.759128482072040
+2001-07-01	7.921185192387180
+2001-10-01	8.159182509192060
+2002-01-01	8.284773274116680
+2002-04-01	8.534183254508970
+2002-07-01	8.841831555792810
+2002-10-01	9.152976830101540
+2003-01-01	9.522052862611200
+2003-04-01	9.731251071457750
+2003-07-01	9.779749366424120
+2003-10-01	9.740363404040160
+2004-01-01	9.733067495037260
+2004-04-01	9.690215149073040
+2004-07-01	9.916256146608640
+2004-10-01	10.058670161618400
+2005-01-01	10.822550196113200
+2005-04-01	11.305354057104400
+2005-07-01	11.348972817049800
+2005-10-01	11.188535914871700
+2006-01-01	10.812816747003200
+2006-04-01	10.346540368601900
+2006-07-01	9.968900103047460
+2006-10-01	9.874716230809990
+2007-01-01	9.097193659398470
+2007-04-01	8.713847977648380
+2007-07-01	8.533254263673600
+2007-10-01	8.292122307677310
+2008-01-01	7.819279365262880
+2008-04-01	7.762199420438700
+2008-07-01	7.285215803851910
+2008-10-01	7.235008796850010
+2009-01-01	7.621324816405020
+2009-04-01	7.803957972535720
+2009-07-01	7.988352593755990
+2009-10-01	7.555115227146630
+2010-01-01	7.462309669528590
+2010-04-01	7.054320844834840
+2010-07-01	6.726248470374550
+2010-10-01	6.621044460749990
+2011-01-01	6.183522460174510
+2011-04-01	5.889964579107450
+2011-07-01	5.760249758271760
+2011-10-01	5.466805291887140
+2012-01-01	5.467976012982220
+2012-04-01	5.374239349048950
+2012-07-01	5.356006074679160
+2012-10-01	5.319654550682060
+2013-01-01	5.339331398705020
+2013-04-01	5.265993251012570
+2013-07-01	5.187536037929250
+2013-10-01	5.129922581335940
+2014-01-01	5.096019590183700
+2014-04-01	4.963797202460950
+2014-07-01	4.967235979950090
+2014-10-01	4.895895757304410
+2015-01-01	4.724602469054870
+2015-04-01	4.704540521814390
+2015-07-01	4.503975302750970
+2015-10-01	4.563803266177810
+2016-01-01	4.319089327718700
+2016-04-01	4.204710375922610
+2016-07-01	4.091941691291320
+2016-10-01	3.872060946232470
+2017-01-01	3.904375190633960
+2017-04-01	3.771106119795070
+2017-07-01	3.695442963037750
+2017-10-01	3.611497164913640
+2018-01-01	3.471446329992570
+2018-04-01	3.445478314703390
+2018-07-01	3.344785420263690
+2018-10-01	3.272437662446230
+;;
+run;
+
+proc sgplot data=d;
+   series x=t y=dx4;
+run; 
+proc sgplot data=d;
+   series x=t y=lx;
+run; 
+
+data d2; set d; j+1; 
+y=x;
+if k>= 213 then x=.;
+run;
+
+proc arima data=d2 plots=all ;
+i var=x(1,4) nlag=100 esacf scan minic;
+run;
+e p=(1)(1) q=(4)(4);
+run;
+forecast id=t lead=10 out=previstos interval=qtr;
+run;
+
+data previstos; set previstos; j+1;
+run;
+
+data all; merge previstos d2(rename=(x=x0)); by j;
+run;
+
+
+proc sgplot data=all; where j>=200;
+   series x=t y=x ;
+   series x=t y=x0 ;
+   series x=t y=forecast ;
+   series x=t y=l95;
+   series x=t y=u95;
+run;
+
+
+
+proc arima data=d plots=all;
+i var=x(1) esacf scan minic;
+e p=1 q=2;
+run;
+forecast id=t lead=5 out=previstos;
+run;
+
+proc sgplot data=previstos; where t>'01 01 2001'd;
+   series x=t y=x ;
+   series x=t y=forecast ;
+   series x=t y=l95;
+   series x=t y=u95;
+run;
+
+
+
+data tmp;
+input ano Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec @@;
+cards;
+1948 295 286 300 278 272 268 308 321 313 308 291 296
+1949 294 273 300 271 282 285 318 323 313 311 291 293
+1950 297 273 294 259 276 294 316 325 315 312 292 301
+1951 304 282 313 296 313 307 328 334 329 329 304 312
+1952 312 300 317 292 300 311 345 350 344 336 315 323
+1953 322 296 315 287 307 321 354 356 348 334 320 340
+1954 332 302 324 305 318 329 359 363 359 352 335 342
+1955 329 306 332 309 326 325 354 367 362 354 337 345
+1956 339 325 345 309 315 334 370 383 375 370 344 355
+1957 346 317 348 331 345 348 380 381 377 376 348 356
+1958 344 320 347 326 343 338 361 368 378 374 347 358
+1959 349 323 358 331 338 343 374 380 377 368 346 358
+1960 338 329 347 327 335 336 370 399 385 368 351 362
+1961 358 333 356 335 348 346 374 386 384 372 343 346
+1962 346 318 359 328 333 329 366 373 367 363 337 346
+1963 355 314 343 322 336 327 362 366 361 358 327 330
+1964 336 326 337 316 331 331 359 350 356 347 328 336
+1965 315 292 322 291 302 310 330 335 333 318 305 313
+1966 301 281 302 291 297 291 311 319 317 317 296 307
+1967 295 265 300 271 291 290 310 318 310 304 285 288
+1968 277 260 282 274 288 287 308 312 306 304 282 305
+1969 284 273 286 284 294 288 315 322 317 309 295 306
+1970 300 275 301 292 298 306 326 332 329 328 308 324
+1971 299 284 306 290 292 285 295 306 317 305 294 287
+1972 278 261 275 256 270 264 265 284 284 275 269 275
+1973 259 244 267 255 260 253 267 277 277 264 255 260
+1974 261 238 257 246 254 255 273 276 286 283 261 276
+1975 264 243 259 250 262 253 280 288 270 273 241 266
+1976 257 242 266 241 252 250 281 278 286 278 260 272
+1977 274 256 276 259 273 272 297 296 290 282 262 275
+1978 262 251 285 260 272 265 296 312 289 282 274 281
+;;              
+run;
+
+proc transpose data=tmp out=nasc(rename=(_name_=mes col1=x));
+var Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec;
+by ano;
+run;
+data nasc; t+1; set nasc; 
+dx=x-lag(x);
+run;
+
+proc sgplot data=nasc;
+   series x=t y=x;
+run; 
+proc sgplot data=nasc;
+   series x=t y=dx;
+run; 
+
+proc arima data=nasc plots=all;
+i var=x(1,12) nlag=100 esacf scan minic;
+run;
+e p=(1)(12) q=(1)(12);
+run;
+forecast id=t lead=10 out=previstos;
+run;
+
+proc sgplot data=previstos; where t>=300;
+   series x=t y=x ;
+   series x=t y=forecast ;
+   series x=t y=l95;
+   series x=t y=u95;
+run;
+
+
