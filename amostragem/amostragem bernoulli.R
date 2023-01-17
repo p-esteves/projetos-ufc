@@ -20,7 +20,7 @@ for(i in 1:N) {
       
     }
   }
-
+#chosen
 #amostra escolhida e seu tamanho
 n=length(chosen);paste0("foram escolhidos ",n," elementos: ");chosen
 
