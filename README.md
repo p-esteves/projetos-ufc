@@ -1,5 +1,5 @@
 # Projetos UFC
-Projetos realizados durante o bacharelado em Estatística na Universidade Federal do Ceará, divididos por disciplina
+Projetos realizados durante meu bacharelado em Estatística na Universidade Federal do Ceará, divididos por disciplina
 
 ## Grade curricular do curso:
 
